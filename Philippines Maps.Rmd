@@ -1,0 +1,111 @@
+---
+title: "Phillipines Map Data Rough Draft"
+output:
+  html_document:
+    df_print: paged
+---
+
+Rom, Soumya, I have put several map ideas in here, we can decide which ones to use and I'll work on making them pretty.
+
+```{r load-libraries, eval=TRUE}
+library(stringr)
+library(ggplot2)
+library(maps)
+library(mapdata)
+library(ggrepel) #not using this at the moment, but it does give the option to add labels.  While not useful for the bombing sites, we could use it to label cities.
+library(lubridate)
+library(plyr)
+```
+
+Like I said to Soumya, I haven't had a chance to work with the SQL server stuff, so there is a little bit of quick data cleaning of one of these.  Also, I'm loading the data.frame straight off the .csv file.  Right now, it's referring to the local directory, but the link is just commented out.
+
+```{r load-data, eval=TRUE}
+# ref: [HOW]
+#urlfile <- "https://query.data.world/s/7tdvewopqdr5mu4zwlqeuy4c7nyeco"
+#tableWW2 <- read.table(file = urlfile, header = TRUE, fill = TRUE, sep = ",")
+tableWW2<-read.table(file = "THOR_WWII_DATA_CLEAN.csv", header = TRUE, fill = TRUE, sep = ",")#,stringsAsFactors = FALSE
+```
+```{r cleandataframe, eval=TRUE}
+tableWW2 <- tableWW2[, -which(names(tableWW2) %in% c("TGT_COUNTRY_CODE","TGT_ID","TGT_INDUSTRY_CODE","SOURCE_LATITUDE","SOURCE_LONGITUDE","MDS","TAKEOFF_LATITUDE","TAKEOFF_LONGITUDE","TARGET_COMMENT","MISSION_COMMENTS","SOURCE","DATABASE_EDIT_COMMENTS", "BDA", "CALLSIGN", "ROUNDS_AMMO", "SPARES_RETURN_AC","WX_FAIL_AC", "MECH_FAIL_AC", "MISC_FAIL_AC", "TIME_OVER_TARGET","SIGHTING_METHOD_CODE","SIGHTING_EXPLANATION"))]
+```
+
+```{r separatingdataframe, eval=TRUE, include=FALSE}
+tableWW2ETO <- subset(tableWW2, THEATER == "ETO")
+tableWW2PTO <- subset(tableWW2, THEATER == "PTO")
+tableWW2CBI <- subset(tableWW2, THEATER == "CBI")
+tableWW2MTO <- subset(tableWW2, THEATER == "MTO")
+
+```
+
+
+First off is defining the map and data.frame to use:
+```{r}
+philtargets<-subset(tableWW2PTO,TGT_COUNTRY=="PHILIPPINE ISLANDS")
+wm<-map_data("world")
+PhilippinesMap<-ggplot() + geom_polygon(data = wm, aes(x=long, y = lat, group = group), fill = NA, color = "black") + coord_fixed(1.3)+xlim(114,128)+ylim(2,21)
+```
+
+First, I broke things appart by year.  I have two versions here, one with all dots the same size, the other with them logarithmically scaled to the number of missions.  This could also be done with the total tons of munitions, if desired.
+
+```{r}
+philtargets<-subset(tableWW2PTO,TGT_COUNTRY=="PHILIPPINE ISLANDS")
+philtargetsfreq<-ddply(philtargets,.(LONGITUDE,LATITUDE),nrow)#this is creating a data.frame with three columns, longituded, latitude and v1, which is the number of times each set of values appeared.  This is in plyr, but not dplyr, the command for it is different there.
+philtargetsfinal<-merge(philtargets,philtargetsfreq) #attaching the number of occurences to the target list
+PHnumdate<-as.numeric(mdy(philtargetsfinal[,5])) #turning the date into a number that can be used
+philtargetsfinal<-cbind(philtargetsfinal,PHnumdate) #attaching to the master data.frame
+#breaking the attacks down by year:
+philtargets1941<-subset(philtargetsfinal,philtargetsfinal$PHnumdate>-10592 & philtargetsfinal$PHnumdate< -10227)#191
+philtargets1942<-subset(philtargetsfinal,philtargetsfinal$PHnumdate>-10227 & philtargetsfinal$PHnumdate< -9862)#1942
+philtargets1943<-subset(philtargetsfinal,philtargetsfinal$PHnumdate> -9862 & philtargetsfinal$PHnumdate< -9497)#1943
+philtargets1944<-subset(philtargetsfinal,philtargetsfinal$PHnumdate> -9497 & philtargetsfinal$PHnumdate< -9131)#1944
+philtargets1945<-subset(philtargetsfinal,philtargetsfinal$PHnumdate> -9131)#1945
+
+#plotting them on the map of the philippines, each map is a separate year
+PhilippinesMap+geom_point(data=philtargets1941,aes(LONGITUDE,LATITUDE),size=1,color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1942,aes(LONGITUDE,LATITUDE),size=1,color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1943,aes(LONGITUDE,LATITUDE),size=1,color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1944,aes(LONGITUDE,LATITUDE),size=1,color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1945,aes(LONGITUDE,LATITUDE),size=1,color="red")+theme_bw()
+```
+
+In the above chunk of code, I added in a column of number of occurences.  I repeat the previous maps with everything sized according to the logarithm of the number of occurences.  This has the unfortunate effect of removing all targets hit only once, thus the +1 in all years except 1945
+
+```{r}
+PhilippinesMap+geom_point(data=philtargets1941,aes(LONGITUDE,LATITUDE),size=log(philtargets1941$V1+1),color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1942,aes(LONGITUDE,LATITUDE),size=log(philtargets1942$V1+1),color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1943,aes(LONGITUDE,LATITUDE),size=log(philtargets1943$V1+1),color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1944,aes(LONGITUDE,LATITUDE),size=log(philtargets1944$V1+1),color="red")+theme_bw()
+PhilippinesMap+geom_point(data=philtargets1945,aes(LONGITUDE,LATITUDE),size=log(philtargets1945$V1),color="red")+theme_bw()
+```
+
+My wife pointed out that the cirles on the 1945 map are difficult to distinguish and recomended putting outlines on them.  The second geom_point command below does this, however the lines end up overlapping each other a great deal. I fixed this mostly by shrinking the width of the border and making it fairly transparent, however, there still is a bit of black covering parts of Manilla.  I like this idea, but I'm having trouble getting it just right. 
+
+```{r}
+PhilippinesMap+geom_point(data=philtargets1945,aes(LONGITUDE,LATITUDE),size=log(philtargets1945$V1),color="red")+geom_point(data=philtargets1945,aes(LONGITUDE,LATITUDE),size=log(philtargets1945$V1),shape=1,color="black",stroke=.5,alpha=1/30)+theme_bw()
+```
+
+I also did the map by weapon type.  I did not break it down by year, as the incendiaries were dropped only in 1945 and the frag round were dropped mostly in 1945, with less than a quarter dropped in 1944.  If we want, I can do a 1944 breakdown of frag vs. high explosive, but that seemed to be needlessly drilling down.
+
+The colors for the map were chosen on the basis of being easy to tell appart.  I'm not particularly happy with them, I was just trying for distinctness.  The first map is just the points without scaling, the second is based on how many missions were flown to each site.  I changed the base of the logarithms to 5 because I felt that the circles from HE were overlapping the entire country.
+
+```{r}
+philICtargets<-philtargetsfinal[philtargetsfinal$TONS_OF_IC>0,] #want to get rid of both 0s and NAs, thus the two steps.  Because I used final, I already have frequency if that is desired.
+philICtargets<-philICtargets[complete.cases(philICtargets$TONS_OF_IC),] 
+philFragtargets<-philtargetsfinal[philtargetsfinal$TONS_OF_FRAG>0,] #repeating for frag bombs
+philFragtargets<-philFragtargets[complete.cases(philFragtargets$TONS_OF_FRAG),]
+philHEtargets<-philtargetsfinal[as.numeric(philtargetsfinal$TONS_OF_HE)>0,] #repeating for HE bombs, this is where I had to do a little data cleaning
+philHEtargets$TONS_OF_HE<-as.numeric(philHEtargets$TONS_OF_HE)
+philHEtargets<-philHEtargets[complete.cases(philHEtargets$TONS_OF_HE),]
+PhilippinesMap+geom_point(data=philHEtargets,aes(LONGITUDE,LATITUDE),size=1,color="red")+geom_point(data=philICtargets,aes(LONGITUDE,LATITUDE),size=1,color="forestgreen")+geom_point(data=philFragtargets,aes(LONGITUDE,LATITUDE),size=1,color="orange2")+theme_bw()
+#now with scaling
+PhilippinesMap+geom_point(data=philHEtargets,aes(LONGITUDE,LATITUDE),size=log(philHEtargets$TONS_OF_HE,5),color="red")+geom_point(data=philICtargets,aes(LONGITUDE,LATITUDE),size=log(philICtargets$TONS_OF_IC,5),color="forestgreen")+geom_point(data=philFragtargets,aes(LONGITUDE,LATITUDE),size=log(philFragtargets$TONS_OF_FRAG,5),color="orange2")+theme_bw()
+```
+
+I also tried placing the outline of the Philippines on top of the points, which I like for smaller images and am undecided on for larger ones.
+
+```{r}
+ggplot()+geom_point(data=philHEtargets,aes(LONGITUDE,LATITUDE),size=log(philHEtargets$TONS_OF_HE,5),color="red")+geom_point(data=philICtargets,aes(LONGITUDE,LATITUDE),size=log(philICtargets$TONS_OF_IC,5),color="forestgreen")+geom_point(data=philFragtargets,aes(LONGITUDE,LATITUDE),size=log(philFragtargets$TONS_OF_FRAG,5),color="orange2")+theme_bw()+ geom_polygon(data = wm, aes(x=long, y = lat, group = group), fill = NA, color = "black") + coord_fixed(1.3)+xlim(114,128)+ylim(2,21)
+
+```
+
+I did not do any maps based on target type data, but can easily add them if you want. 
